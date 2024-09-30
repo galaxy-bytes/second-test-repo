@@ -27,8 +27,8 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           await github.repos.createDispatchEvent({
-            owner: 'galaxy-bytes',  # Replace with the central org/repo owner
-            repo: 'main-test-repo',  # Central repo with the leaderboard
+            owner: 'galaxy-bytes', 
+            repo: 'main-test-repo',
             event_type: 'leaderboard-update',
             client_payload: {
               contributor: context.payload.pull_request.user.login,
