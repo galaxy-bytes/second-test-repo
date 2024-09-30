@@ -1,0 +1,37 @@
+name: Dispatch Leaderboard Update
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  dispatch-update:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+    - name: Set contributor points
+      id: set_points
+      run: |
+        POINTS=5 # Default to small task
+        if [[ "${{ join(github.event.pull_request.labels.*.name, ' ') }}" =~ medium ]]; then
+          POINTS=10
+        elif [[ "${{ join(github.event.pull_request.labels.*.name, ' ') }}" =~ large ]]; then
+          POINTS=15
+        fi
+        echo "POINTS=$POINTS" >> $GITHUB_ENV
+
+    - name: Dispatch leaderboard update to central repo
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.repos.createDispatchEvent({
+            owner: 'galaxy-bytes',  # Replace with the central org/repo owner
+            repo: 'main-test-repo',  # Central repo with the leaderboard
+            event_type: 'leaderboard-update',
+            client_payload: {
+              contributor: context.payload.pull_request.user.login,
+              points: process.env.POINTS
+            }
+          });
