@@ -1,14 +1,11 @@
 name: Dispatch Leaderboard Update
-
 on:
   pull_request:
     types: [closed]
-
 jobs:
   dispatch-update:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true
-
     steps:
     - name: Set contributor points
       id: set_points
@@ -20,13 +17,12 @@ jobs:
           POINTS=15
         fi
         echo "POINTS=$POINTS" >> $GITHUB_ENV
-
     - name: Dispatch leaderboard update to central repo
       uses: actions/github-script@v6
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          await github.repos.createDispatchEvent({
+          await github.rest.repos.createDispatchEvent({
             owner: 'galaxy-bytes', 
             repo: 'main-test-repo',
             event_type: 'leaderboard-update',
