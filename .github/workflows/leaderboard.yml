@@ -1,0 +1,98 @@
+name: Hacktoberfest Leaderboard
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-leaderboard:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+    - name: Set contributor points
+      id: set_points
+      run: |
+        POINTS=5 # Default to small (5 points)
+        if [[ "${{ join(github.event.pull_request.labels.*.name, ' ') }}" =~ medium ]]; then
+          POINTS=10
+        elif [[ "${{ join(github.event.pull_request.labels.*.name, ' ') }}" =~ large ]]; then
+          POINTS=15
+        fi
+        echo "POINTS=$POINTS" >> $GITHUB_ENV
+
+    - name: Update leaderboard
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const issue_number = 1; // Replace with your leaderboard issue number
+          const repo_owner = 'galaxy-bytes'; // Replace with your org or repo owner
+          const repo_name = 'main-test-repo'; // Replace with the repo containing the leaderboard issue
+          
+          const contributor = context.payload.pull_request.user.login;
+          const new_points = parseInt(process.env.POINTS);
+
+          async function updateLeaderboard() {
+            // Fetch current leaderboard
+            const { data: issue } = await github.rest.issues.get({
+              owner: repo_owner,
+              repo: repo_name,
+              issue_number: issue_number
+            });
+            
+            let lines = issue.body.split('\n');
+            let tableStart = lines.findIndex(line => line.trim().startsWith('| Rank | Contributor'));
+            let tableEnd = lines.findIndex((line, index) => index > tableStart && line.trim() === '');
+            
+            if (tableStart === -1 || tableEnd === -1) {
+              console.log('Could not find the leaderboard table in the issue body. Creating a new one.');
+              tableStart = lines.findIndex(line => line.includes('Current Rankings:')) + 1;
+              lines.splice(tableStart, 0, '| Rank | Contributor | Number of Merged PRs | Total Points |');
+              lines.splice(tableStart + 1, 0, '|------|----------------|----------------------|--------------|');
+              tableEnd = tableStart + 2;
+            }
+
+            let tableLines = lines.slice(tableStart + 2, tableEnd);
+            let contributorEntry = tableLines.find(line => line.includes(contributor));
+
+            if (contributorEntry) {
+              let parts = contributorEntry.split('|');
+              let currentPRs = parseInt(parts[2].trim()) || 0;
+              let currentPoints = parseInt(parts[3].trim()) || 0;
+              parts[2] = ` ${currentPRs + 1} `;
+              parts[3] = ` ${currentPoints + new_points} `;
+              contributorEntry = parts.join('|');
+            } else {
+              contributorEntry = `| | ${contributor} | 1 | ${new_points} |`;
+              tableLines.push(contributorEntry);
+            }
+
+            tableLines = tableLines.filter(line => line.trim() !== '');
+
+            tableLines.sort((a, b) => {
+              let aPoints = parseInt(a.split('|')[3]?.trim()) || 0;
+              let bPoints = parseInt(b.split('|')[3]?.trim()) || 0;
+              return bPoints - aPoints;
+            });
+
+            tableLines = tableLines.map((line, index) => {
+              let parts = line.split('|');
+              parts[1] = ` ${index + 1} `;
+              return parts.join('|');
+            });
+
+            lines.splice(tableStart + 2, tableEnd - tableStart - 2, ...tableLines);
+
+            // Update the issue with the new content
+            await github.rest.issues.update({
+              owner: repo_owner,
+              repo: repo_name,
+              issue_number: issue_number,
+              body: lines.join('\n')
+            });
+
+            console.log('Leaderboard updated successfully.');
+          }
+
+          await updateLeaderboard();
